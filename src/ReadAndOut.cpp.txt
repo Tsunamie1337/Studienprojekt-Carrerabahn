@@ -1,0 +1,174 @@
+#include <Arduino.h>
+
+// --- Pins ---
+const int PIN_GAS = 3; // ADC
+const int PWM_PIN = 4;
+
+// --- PWM settings ---
+const int PWM_CHANNEL = 0;
+const int PWM_FREQ_HZ = 5000; // NICHT HOHER WIE 5K
+const int PWM_RES_BITS = 12;
+const int PWM_MAX = (1 << PWM_RES_BITS) - 1;
+const int PWM_VREF_MV = 3300;
+const int PWM_TARGET_MV = 2000;
+const int PWM_MAX_2V = (PWM_MAX * PWM_TARGET_MV) / PWM_VREF_MV;
+
+// --- Calibration defaults (from your measurement) ---
+int adc_kein_gas = 3;    // Trigger losgelassen
+int adc_vollgas = 2027;  // Trigger voll gedrueckt
+
+// --- Behavior ---
+const float DEADZONE = 0.03f;
+const unsigned long STATUS_INTERVAL_MS = 2000;
+
+unsigned long lastStatusMs = 0;
+int currentPercent = 0;
+int currentPwmValue = 0;
+
+String serial_lesen() {
+  String input = "";
+  while (Serial.available()) {
+    char c = Serial.read();
+    if (c == '\n' || c == '\r') continue;
+    input += c;
+  }
+  input.trim();
+  input.toLowerCase();
+  return input;
+}
+
+String warte_auf_eingabe() {
+  while (true) {
+    delay(50);
+    if (Serial.available()) {
+      String s = serial_lesen();
+      if (s.length() > 0) return s;
+    }
+  }
+}
+
+int lese_adc_mittelwert(int samples = 20, int delay_ms = 10) {
+  long summe = 0;
+  for (int i = 0; i < samples; i++) {
+    summe += analogRead(PIN_GAS);
+    delay(delay_ms);
+  }
+  return (int)(summe / samples);
+}
+
+void kalibrierung_durchfuehren() {
+  Serial.println("\n╔══════════════════════════════════════╗");
+  Serial.println(  "║       KALIBRIERUNG GESTARTET         ║");
+  Serial.println(  "║   Schrittweise Messung der Enden     ║");
+  Serial.println(  "╚══════════════════════════════════════╝");
+
+  int neuer_kein_gas = 0;
+  int neuer_vollgas = 0;
+
+  while (true) {
+    Serial.println("\n1) Trigger LOSLASSEN, dann 'y' senden");
+    String antwort = warte_auf_eingabe();
+    if (antwort != "y") {
+      Serial.println("  Bitte 'y' eingeben.");
+      continue;
+    }
+    neuer_kein_gas = lese_adc_mittelwert();
+    Serial.printf("  Kein Gas ADC: %d\n", neuer_kein_gas);
+
+    Serial.println("\n2) Trigger VOLL DRUECKEN, dann 'y' senden");
+    antwort = warte_auf_eingabe();
+    if (antwort != "y") {
+      Serial.println("  Bitte 'y' eingeben.");
+      continue;
+    }
+    neuer_vollgas = lese_adc_mittelwert();
+    Serial.printf("  Vollgas ADC:  %d\n", neuer_vollgas);
+
+    if (abs(neuer_kein_gas - neuer_vollgas) < 100) {
+      Serial.println("\n⚠  Spreizung zu klein – Trigger wirklich bewegt?");
+      Serial.println("   Kalibrierung verworfen, alte Werte bleiben.\n");
+      return;
+    }
+    break;
+  }
+
+  while (true) {
+    Serial.println("\n┌──────────────────────────────────────┐");
+    Serial.println(  "│       KALIBRIERUNG ABGESCHLOSSEN     │");
+    Serial.println(  "├──────────────────────────────────────┤");
+    Serial.printf(   "│  Kein Gas  → ADC: %-5d               │\n", neuer_kein_gas);
+    Serial.printf(   "│  Vollgas   → ADC: %-5d               │\n", neuer_vollgas);
+    Serial.printf(   "│  Spreizung:       %-5d counts         │\n", abs(neuer_kein_gas - neuer_vollgas));
+    Serial.println(  "└──────────────────────────────────────┘");
+    Serial.println("  Werte uebernehmen? [y / n]");
+
+    String antwort = warte_auf_eingabe();
+
+    if (antwort == "y") {
+      adc_kein_gas = neuer_kein_gas;
+      adc_vollgas = neuer_vollgas;
+      Serial.println("✔  Werte uebernommen!\n");
+      break;
+    } else if (antwort == "n") {
+      Serial.println("↺  Wiederhole Kalibrierung...");
+      kalibrierung_durchfuehren();
+      return;
+    } else {
+      Serial.println("  Bitte 'y' oder 'n' eingeben.");
+    }
+  }
+}
+
+int lies_gas_prozent() {
+  int roh = analogRead(PIN_GAS);
+  int spanne = adc_vollgas - adc_kein_gas;
+  if (spanne == 0) return 0;
+
+  float normiert = (float)(roh - adc_kein_gas) / (float)spanne;
+  if (normiert < DEADZONE)          normiert = 0.0f;
+  if (normiert > (1.0f - DEADZONE)) normiert = 1.0f;
+  normiert = constrain(normiert, 0.0f, 1.0f);
+
+  return (int)(normiert * 100.0f);
+}
+
+void setup() {
+  Serial.begin(115200);
+  delay(200);
+
+  analogReadResolution(12);
+  analogSetAttenuation(ADC_11db);
+
+  pinMode(PWM_PIN, OUTPUT);
+  ledcSetup(PWM_CHANNEL, PWM_FREQ_HZ, PWM_RES_BITS);
+  ledcAttachPin(PWM_PIN, PWM_CHANNEL);
+  ledcWrite(PWM_CHANNEL, 0);
+
+  lastStatusMs = millis();
+  Serial.println("Gas -> PWM (0-2V) aktiv");
+  Serial.printf("Standardwerte: Kein Gas=%d  Vollgas=%d\n", adc_kein_gas, adc_vollgas);
+  Serial.println("Zum Kalibrieren: 'c' senden");
+}
+
+void loop() {
+  if (Serial.available()) {
+    String cmd = serial_lesen();
+    if (cmd == "c") {
+      kalibrierung_durchfuehren();
+      Serial.println("  Weiter mit 'c' oder normal fahren.\n");
+    }
+  }
+
+  currentPercent = lies_gas_prozent();
+  currentPwmValue = map(currentPercent, 0, 100, 0, PWM_MAX_2V);
+  ledcWrite(PWM_CHANNEL, currentPwmValue);
+
+  unsigned long nowMs = millis();
+  if (nowMs - lastStatusMs >= STATUS_INTERVAL_MS) {
+    Serial.print("Gas %: ");
+    Serial.print(currentPercent);
+    Serial.print(" -> PWM ticks: ");
+    Serial.println(currentPwmValue);
+    lastStatusMs = nowMs;
+  }
+}

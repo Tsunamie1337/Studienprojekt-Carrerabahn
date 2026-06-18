@@ -1,0 +1,55 @@
+#include <Arduino.h>
+
+const int PWM_PIN = 4;
+const int PWM_CHANNEL = 0;
+const int PWM_FREQ_HZ = 5000; //NICHT HÖHER WIE 5K! BITTEEE
+const int PWM_RES_BITS = 12;
+const int PWM_MAX = (1 << PWM_RES_BITS) - 1;
+const int PWM_VREF_MV = 3300;
+const int PWM_TARGET_MV = 2000;
+const int PWM_MAX_2V = (PWM_MAX * PWM_TARGET_MV) / PWM_VREF_MV;
+const unsigned long STATUS_INTERVAL_MS = 10000;
+
+int currentPercent = 0;
+int currentPwmValue = 0;
+unsigned long lastStatusMs = 0;
+
+void setup() {
+  Serial.begin(115200);
+  pinMode(PWM_PIN, OUTPUT);
+  ledcSetup(PWM_CHANNEL, PWM_FREQ_HZ, PWM_RES_BITS);
+  ledcAttachPin(PWM_PIN, PWM_CHANNEL);
+  ledcWrite(PWM_CHANNEL, 0);
+  lastStatusMs = millis();
+  Serial.println("Send 0-100 for 0-2V");
+}
+
+void loop() {
+  if (Serial.available()) {
+    String line = Serial.readStringUntil('\n');
+    line.trim();
+    if (line.length() > 0) {
+      int percent = line.toInt();
+      currentPercent = constrain(percent, 0, 100);
+      currentPwmValue = map(currentPercent, 0, 100, 0, PWM_MAX_2V);
+      ledcWrite(PWM_CHANNEL, currentPwmValue);
+      Serial.print("PWM %: ");
+      Serial.print(currentPercent);
+      Serial.print(" -> ");
+      Serial.print(currentPwmValue);
+      Serial.println(" ticks");
+    }
+  }
+
+  unsigned long nowMs = millis();
+  if (nowMs - lastStatusMs >= STATUS_INTERVAL_MS) {
+    Serial.print("PWM %: ");
+    Serial.print(currentPercent);
+    Serial.print(" -> ");
+    Serial.print(currentPwmValue);
+    Serial.println(" ticks");
+    lastStatusMs = nowMs;
+  }
+
+  delay(10);
+}

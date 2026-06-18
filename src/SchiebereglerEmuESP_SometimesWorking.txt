@@ -1,0 +1,46 @@
+#include <Arduino.h>
+
+const int PWM_PIN = 4;
+const int PWM_CHANNEL = 0;
+const int PWM_FREQ_HZ = 20000;
+const int PWM_RES_BITS = 12;
+const int PWM_MAX = (1 << PWM_RES_BITS) - 1;
+
+// Initialisiert Serial und PWM-Ausgabe.
+void setup() {
+  pinMode(PWM_PIN, OUTPUT);
+  Serial.begin(115200);
+  ledcSetup(PWM_CHANNEL, PWM_FREQ_HZ, PWM_RES_BITS);
+  ledcAttachPin(PWM_PIN, PWM_CHANNEL);
+}
+
+// Setzt den PWM-Wert anhand eines Prozentwerts und meldet Aenderungen.
+void setSpeed(int percent) {
+  static int currentPercent = -1;
+  int clampedPercent = constrain(percent, 0, 100);
+  if (clampedPercent != currentPercent) {
+    currentPercent = clampedPercent;
+    int pwmValue = map(currentPercent, 0, 100, 0, PWM_MAX);
+    ledcWrite(PWM_CHANNEL, pwmValue);
+    Serial.print("PWM: ");
+    Serial.print(currentPercent);
+    Serial.println("%");
+  }
+}
+
+// Liest Eingaben und fuehrt den 1-Sekunden-Test aus.
+void loop() {
+  static unsigned long lastToggleMs = 0;
+  static bool high = false;
+
+  if (Serial.available()) {
+    int speed = Serial.parseInt();
+    setSpeed(speed);
+  }
+
+  if (millis() - lastToggleMs >= 1000) {
+    lastToggleMs = millis();
+    high = !high;
+    setSpeed(high ? 100 : 20);
+  }
+}
