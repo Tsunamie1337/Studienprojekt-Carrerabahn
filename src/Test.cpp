@@ -149,22 +149,21 @@ void handle_button() {
   bool aktuell = digitalRead(PIN_BTN_IN);
   unsigned long jetzt = millis();
 
-  // Zustandswechsel nur akzeptieren wenn seit letztem Wechsel mind. 20ms vergangen (Entprellung)
   if (aktuell != letzter_btn_zustand && (jetzt - letzter_wechsel) > 20) {
     letzter_btn_zustand = aktuell;
     letzter_wechsel = jetzt;
 
     if (aktuell == LOW && (jetzt - letzter_spurwechsel) > SPURWECHSEL_COOLDOWN_MS) {
-      // Button gedrückt → Transistor AN, bleibt AN solange Button gehalten
-      Serial.println("Spurwechsel → Transistor an");
-      digitalWrite(PIN_BTN_OUT, HIGH);
+      // Button gedrückt → Transistor AUS (invertierte Logik)
+      Serial.println("Spurwechsel → Transistor aus");
+      digitalWrite(PIN_BTN_OUT, LOW);
       letzter_spurwechsel = jetzt;
     }
 
     if (aktuell == HIGH) {
-      // Button losgelassen → Transistor AUS
-      digitalWrite(PIN_BTN_OUT, LOW);
-      Serial.println("Transistor aus");
+      // Button losgelassen → Transistor AN (invertierte Logik)
+      digitalWrite(PIN_BTN_OUT, HIGH);
+      Serial.println("Transistor an");
     }
   }
 }
@@ -181,7 +180,7 @@ void setup() {
 
   pinMode(PIN_BTN_IN,  INPUT_PULLUP);
   pinMode(PIN_BTN_OUT, OUTPUT);
-  digitalWrite(PIN_BTN_OUT, LOW);
+  digitalWrite(PIN_BTN_OUT, HIGH);
 
   ledcSetup(PWM_CHANNEL, PWM_FREQ_HZ, PWM_RES_BITS);
   ledcAttachPin(PWM_PIN, PWM_CHANNEL);
