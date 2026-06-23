@@ -28,11 +28,39 @@ unsigned long letzter_spurwechsel           = 0;
 // --- State ---
 int  aktueller_speed    = 0;   // 0-100%
 bool spurwechsel_aktiv  = false;
+unsigned long letztes_heartbeat_ms = 0;
 
 // --- Webserver auf Port 80 ---
 WebServer server(80);
 
 // ───────────────────────────────────────────────────────
+
+bool startAccessPoint() {
+  IPAddress localIP(192, 168, 4, 1);
+  IPAddress gateway(192, 168, 4, 1);
+  IPAddress subnet(255, 255, 255, 0);
+
+  WiFi.persistent(false);
+  WiFi.disconnect(true, true);
+  WiFi.mode(WIFI_AP);
+  WiFi.setSleep(false);
+
+  if (!WiFi.softAPConfig(localIP, gateway, subnet)) {
+    Serial.println("Fehler: softAPConfig fehlgeschlagen");
+    return false;
+  }
+
+  if (!WiFi.softAP(AP_SSID, AP_PASSWORD, 1, false, 4)) {
+    Serial.println("Fehler: softAP konnte nicht gestartet werden");
+    return false;
+  }
+
+  Serial.printf("Chip:         %s Rev.%d\n", ESP.getChipModel(), ESP.getChipRevision());
+  Serial.printf("Access Point: %s\n", AP_SSID);
+  Serial.printf("IP Adresse:   %s\n", WiFi.softAPIP().toString().c_str());
+  Serial.printf("AP MAC:       %s\n", WiFi.softAPmacAddress().c_str());
+  return true;
+}
 
 // Setzt die Geschwindigkeit per PWM
 void setSpeed(int percent) {
@@ -103,11 +131,33 @@ void handle_not_found() {
   server.send(404, "application/json", "{\"error\":\"Nicht gefunden\"}");
 }
 
+void printHeartbeat() {
+  unsigned long jetzt = millis();
+  if ((jetzt - letztes_heartbeat_ms) < 5000) {
+    return;
+  }
+
+  letztes_heartbeat_ms = jetzt;
+  Serial.printf(
+    "Heartbeat: %lu ms | speed=%d%% | AP=%s | IP=%s | freeHeap=%u\n",
+    jetzt,
+    aktueller_speed,
+    WiFi.softAPSSID().c_str(),
+    WiFi.softAPIP().toString().c_str(),
+    ESP.getFreeHeap()
+  );
+}
+
 // ───────────────────────────────────────────────────────
 
 void setup() {
   Serial.begin(115200);
-  delay(200);
+  unsigned long serialStart = millis();
+  while (!Serial && (millis() - serialStart) < 4000) {
+    delay(10);
+  }
+  Serial.println();
+  Serial.println("=== ESP32-C3 Boot ===");
 
   // PWM
   pinMode(PWM_PIN, OUTPUT);
@@ -120,9 +170,9 @@ void setup() {
   digitalWrite(PIN_BTN_OUT, HIGH);  // AUS (invertierte Logik)
 
   // Access Point starten
-  WiFi.softAP(AP_SSID, AP_PASSWORD);
-  Serial.printf("Access Point: %s\n", AP_SSID);
-  Serial.printf("IP Adresse:   %s\n", WiFi.softAPIP().toString().c_str());
+  if (!startAccessPoint()) {
+    Serial.println("AP-Start abgebrochen. Bitte Board-Auswahl, Verkabelung und Serial-Log pruefen.");
+  }
 
   // Endpoints registrieren
   server.on("/speed",       HTTP_POST, handle_speed);
@@ -136,4 +186,5 @@ void setup() {
 
 void loop() {
   server.handleClient();  // Eingehende Requests verarbeiten
+  printHeartbeat();
 }
