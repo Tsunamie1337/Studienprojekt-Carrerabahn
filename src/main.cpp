@@ -39,24 +39,27 @@ bool startAccessPoint() {
   IPAddress localIP(192, 168, 4, 1);
   IPAddress gateway(192, 168, 4, 1);
   IPAddress subnet(255, 255, 255, 0);
+  const uint8_t apChannel = 6;
 
   WiFi.persistent(false);
   WiFi.disconnect(true, true);
   WiFi.mode(WIFI_AP);
   WiFi.setSleep(false);
+  WiFi.setTxPower(WIFI_POWER_19_5dBm);
 
   if (!WiFi.softAPConfig(localIP, gateway, subnet)) {
     Serial.println("Fehler: softAPConfig fehlgeschlagen");
     return false;
   }
 
-  if (!WiFi.softAP(AP_SSID, AP_PASSWORD, 1, false, 4)) {
+  if (!WiFi.softAP(AP_SSID, AP_PASSWORD, apChannel, false, 4)) {
     Serial.println("Fehler: softAP konnte nicht gestartet werden");
     return false;
   }
 
   Serial.printf("Chip:         %s Rev.%d\n", ESP.getChipModel(), ESP.getChipRevision());
   Serial.printf("Access Point: %s\n", AP_SSID);
+  Serial.printf("Kanal:        %u\n", apChannel);
   Serial.printf("IP Adresse:   %s\n", WiFi.softAPIP().toString().c_str());
   Serial.printf("AP MAC:       %s\n", WiFi.softAPmacAddress().c_str());
   return true;
