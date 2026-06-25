@@ -4,7 +4,7 @@ import time
 import requests
 
 BASE_URL = "http://192.168.4.1"
-# sudo .venv/bin/python3 sender.py
+# sudo .venv/bin/python3 webhook.py
 
 def set_speed(percent: int):
     """Sendet Geschwindigkeit an ESP32"""
