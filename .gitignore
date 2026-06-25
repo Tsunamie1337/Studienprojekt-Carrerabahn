@@ -4,3 +4,5 @@
 .vscode/launch.json
 .vscode/ipch
 Notizbuch öffnen.onetoc2
+.venv
+__pycache__
