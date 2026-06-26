@@ -1,17 +1,10 @@
 #include <Arduino.h>
-#include <WiFi.h>
-#include <WebServer.h>
-#include <ArduinoJson.h>
 
 // --- Pins ---
 const int PIN_GAS        = 3;   // ADC-Eingang vom Handregler
 const int PIN_BTN_IN     = 0;   // Spurwechsel-Taster Eingang
 const int PWM_PIN        = 4;   // PWM to the track
 const int PIN_BTN_OUT    = 6;   // BC547 -> Base
-
-// --- WiFi Access Point ---
-const char* AP_SSID     = "Carrera-Controller";  // Network name
-const char* AP_PASSWORD = "MySecureExamplePW123";           // Password (min. 8 char)
 
 // --- PWM ---
 const int PWM_CHANNEL   = 0;
@@ -46,15 +39,10 @@ unsigned long letztes_heartbeat_ms = 0;
 
 enum class Steuerquelle {
   HANDCONTROLLER,
-  WEBHOOK
+  SERIAL
 };
 
 Steuerquelle aktive_steuerquelle = Steuerquelle::HANDCONTROLLER;
-unsigned long letzter_webhook_ms = 0;
-const unsigned long WEBHOOK_PRIORITY_HOLD_MS = 4000;
-
-// --- Webserver on Port 80 ---
-WebServer server(80);
 
 // ───────────────────────────────────────────────────────
 
@@ -163,32 +151,7 @@ int lies_gas_prozent() {
 }
 
 bool startAccessPoint() {
-  IPAddress localIP(192, 168, 4, 1);
-  IPAddress gateway(192, 168, 4, 1);
-  IPAddress subnet(255, 255, 255, 0);
-  const uint8_t apChannel = 6;
-
-  WiFi.persistent(false);
-  WiFi.disconnect(true, true);
-  WiFi.mode(WIFI_AP);
-  WiFi.setSleep(false);
-  WiFi.setTxPower(WIFI_POWER_19_5dBm);
-
-  if (!WiFi.softAPConfig(localIP, gateway, subnet)) {
-    Serial.println("Fehler: softAPConfig fehlgeschlagen");
-    return false;
-  }
-
-  if (!WiFi.softAP(AP_SSID, AP_PASSWORD, apChannel, false, 4)) {
-    Serial.println("Fehler: softAP konnte nicht gestartet werden");
-    return false;
-  }
-
-  Serial.printf("Chip:         %s Rev.%d\n", ESP.getChipModel(), ESP.getChipRevision());
-  Serial.printf("Access Point: %s\n", AP_SSID);
-  Serial.printf("Kanal:        %u\n", apChannel);
-  Serial.printf("IP Adresse:   %s\n", WiFi.softAPIP().toString().c_str());
-  Serial.printf("AP MAC:       %s\n", WiFi.softAPmacAddress().c_str());
+  Serial.println("Serielle Steuerung aktiv. WLAN/Webserver deaktiviert.");
   return true;
 }
 
@@ -201,8 +164,7 @@ void setSpeed(int percent) {
 }
 
 void updateHandreglerSpeed() {
-  if (aktive_steuerquelle == Steuerquelle::WEBHOOK &&
-      (millis() - letzter_webhook_ms) < WEBHOOK_PRIORITY_HOLD_MS) {
+  if (aktive_steuerquelle == Steuerquelle::SERIAL) {
     return;
   }
 
@@ -244,57 +206,52 @@ void handle_button_input() {
   }
 }
 
-// ── HTTP Handler ────────────────────────────────────────
+void handle_serial_command(String cmd) {
+  cmd.trim();
+  cmd.toLowerCase();
 
-// POST /speed  body: {"value": 75}
-void handle_speed() {
-  if (!server.hasArg("plain")) {
-    server.send(400, "application/json", "{\"error\":\"Kein Body\"}");
+  if (cmd.length() == 0) {
     return;
   }
 
-  StaticJsonDocument<64> doc;
-  DeserializationError err = deserializeJson(doc, server.arg("plain"));
-  if (err) {
-    server.send(400, "application/json", "{\"error\":\"Ungültiges JSON\"}");
+  if (cmd == "c") {
+    kalibrierung_durchfuehren();
     return;
   }
 
-  int speed = doc["value"] | -1;
-  if (speed < 0 || speed > 100) {
-    server.send(400, "application/json", "{\"error\":\"Wert muss 0-100 sein\"}");
+  if (cmd == "h") {
+    aktive_steuerquelle = Steuerquelle::HANDCONTROLLER;
+    Serial.println("OK HANDCONTROLLER");
     return;
   }
 
-  setSpeed(speed);
-  aktive_steuerquelle = Steuerquelle::WEBHOOK;
-  letzter_webhook_ms = millis();
-  Serial.printf("Speed gesetzt: %d%%\n", speed);
-  server.send(200, "application/json", "{\"ok\":true}");
-}
+  if (cmd == "l" || cmd == "lane" || cmd == "spur" || cmd == "spurwechsel") {
+    aktive_steuerquelle = Steuerquelle::SERIAL;
+    doSpurwechsel();
+    Serial.println("OK LANE");
+    return;
+  }
 
-// POST /laneswitch
-void handle_spurwechsel() {
-  doSpurwechsel();
-  server.send(200, "application/json", "{\"ok\":true}");
-}
+  int speed = -1;
+  if (cmd.startsWith("s:" ) || cmd.startsWith("s=")) {
+    speed = cmd.substring(2).toInt();
+  } else if (cmd.startsWith("speed:" ) || cmd.startsWith("speed=")) {
+    speed = cmd.substring(6).toInt();
+  } else if (cmd.startsWith("s ") || cmd.startsWith("speed ")) {
+    speed = cmd.substring(cmd.indexOf(' ') + 1).toInt();
+  } else if (cmd.startsWith("s")) {
+    speed = cmd.substring(1).toInt();
+  }
 
-// GET /status
-void handle_status() {
-  StaticJsonDocument<128> doc;
-  doc["speed"]  = aktueller_speed;
-  doc["gas"]    = aktueller_gaswert;
-  doc["source"] = aktive_steuerquelle == Steuerquelle::WEBHOOK ? "webhook" : "handcontroller";
-  doc["ip"]     = WiFi.softAPIP().toString();
+  if (speed >= 0 && speed <= 100) {
+    aktive_steuerquelle = Steuerquelle::SERIAL;
+    aktueller_gaswert = speed;
+    setSpeed(speed);
+    Serial.printf("OK SPEED %d%%\n", speed);
+    return;
+  }
 
-  String out;
-  serializeJson(doc, out);
-  server.send(200, "application/json", out);
-}
-
-// 404 Handler
-void handle_not_found() {
-  server.send(404, "application/json", "{\"error\":\"Nicht gefunden\"}");
+  Serial.printf("ERR UNKNOWN COMMAND: %s\n", cmd.c_str());
 }
 
 void printHeartbeat() {
@@ -305,12 +262,11 @@ void printHeartbeat() {
 
   letztes_heartbeat_ms = jetzt;
   Serial.printf(
-    "Heartbeat: %lu ms | gas=%d%% | speed=%d%% | AP=%s | IP=%s | freeHeap=%u\n",
+    "Heartbeat: %lu ms | gas=%d%% | speed=%d%% | source=%s | freeHeap=%u\n",
     jetzt,
     aktueller_gaswert,
     aktueller_speed,
-    WiFi.softAPSSID().c_str(),
-    WiFi.softAPIP().toString().c_str(),
+    aktive_steuerquelle == Steuerquelle::SERIAL ? "serial" : "handcontroller",
     ESP.getFreeHeap()
   );
 }
@@ -344,36 +300,18 @@ void setup() {
 
   Serial.println("Carrera Handregler bereit.");
   Serial.printf("Standardwerte: Kein Gas=%d  Vollgas=%d\n", adc_kein_gas, adc_vollgas);
-  Serial.println("Zum Kalibrieren: 'c' senden");
+  Serial.println("Serielle Befehle: s<0-100>, l, h, c");
 
-  // Start Access Point
-  if (!startAccessPoint()) {
-    Serial.println("AP-Start abgebrochen. Bitte Board-Auswahl, Verkabelung und Serial-Log pruefen.");
-  }
-
-  // Registrier endpoints
-  server.on("/speed",       HTTP_POST, handle_speed);
-  server.on("/spurwechsel", HTTP_POST, handle_spurwechsel);
-  server.on("/status",      HTTP_GET,  handle_status);
-  server.onNotFound(handle_not_found);
-
-  server.begin();
-  Serial.println("Webserver gestartet.");
+  startAccessPoint();
 }
 
 void loop() {
   if (Serial.available()) {
     String cmd = serial_lesen();
-    if (cmd == "c") {
-      kalibrierung_durchfuehren();
-    } else if (cmd == "h") {
-      aktive_steuerquelle = Steuerquelle::HANDCONTROLLER;
-      Serial.println("Steuerquelle: Handcontroller");
-    }
+    handle_serial_command(cmd);
   }
 
   updateHandreglerSpeed();
-  server.handleClient();  // Handle incomin requests
   handle_button_input();
   printHeartbeat();
 
