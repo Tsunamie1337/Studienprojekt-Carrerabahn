@@ -6,6 +6,26 @@ ESP32-C3 Controller fuer eine Carrera-Bahn mit:
 - Spurwechsel-Button mit Entprellung und Cooldown
 - Kalibrierungsmodus ueber den Serial Monitor
 
+## Branch-Ueberblick
+
+Dieses Repository wird in drei Branches gepflegt:
+
+- `serial`
+- `webhook`
+- `HandcontrollerOnly`
+
+Jeder Branch hat eine eigene Firmware-Variante mit eigenem `.cpp`-Skript fuer den ESP.
+
+Zusaetzlich gilt:
+
+- Die Branches `serial` und `webhook` enthalten jeweils ein Python-Skript zur Steuerung.
+- In diesen beiden Branches liegt beim jeweiligen Python-Skript eine eigene README mit den branch-spezifischen Start- und Bedienhinweisen.
+
+Hinweis fuer den aktuellen Branch:
+
+- Firmware liegt in [src/arduino/main.cpp](src/arduino/main.cpp)
+- Python-Doku liegt in [src/python/README.md](src/python/README.md)
+
 ## Projektueberblick
 
 Das Projekt liest die Gasstellung eines Handreglers analog ein und bildet sie auf ein PWM-Signal ab.
