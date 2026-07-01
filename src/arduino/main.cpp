@@ -38,11 +38,12 @@ bool spurwechsel_aktiv  = false;
 unsigned long letztes_heartbeat_ms = 0;
 
 enum class Steuerquelle {
-  HANDCONTROLLER,
-  SERIAL_CMD
+  SOFTWARE,
+  HANDCONTROLLER
 };
 
-Steuerquelle aktive_steuerquelle = Steuerquelle::HANDCONTROLLER;
+Steuerquelle aktive_steuerquelle = Steuerquelle::SOFTWARE;
+int letzter_serieller_speed_wert = -1;
 
 // ───────────────────────────────────────────────────────
 
@@ -151,8 +152,22 @@ int lies_gas_prozent() {
 }
 
 bool startAccessPoint() {
-  Serial.println("Serielle Steuerung aktiv. WLAN/Webserver deaktiviert.");
+  Serial.println("Serielle Steuerung aktiv. Modus per c/s umschaltbar.");
   return true;
+}
+
+const char* steuerquelle_als_text(Steuerquelle quelle) {
+  return quelle == Steuerquelle::HANDCONTROLLER ? "handcontroller" : "software";
+}
+
+void sende_fahrdaten(int speed) {
+  speed = constrain(speed, 0, 100);
+  if (speed == letzter_serieller_speed_wert) {
+    return;
+  }
+
+  letzter_serieller_speed_wert = speed;
+  Serial.printf("s:%d\n", speed);
 }
 
 // Sets the speed per PWM
@@ -164,13 +179,14 @@ void setSpeed(int percent) {
 }
 
 void updateHandreglerSpeed() {
-  if (aktive_steuerquelle == Steuerquelle::SERIAL_CMD) {
+  if (aktive_steuerquelle == Steuerquelle::SOFTWARE) {
     return;
   }
 
   aktive_steuerquelle = Steuerquelle::HANDCONTROLLER;
   aktueller_gaswert = lies_gas_prozent();
   setSpeed(aktueller_gaswert);
+  sende_fahrdaten(aktueller_gaswert);
 }
 
 // Lane switch
@@ -215,20 +231,39 @@ void handle_serial_command(String cmd) {
   }
 
   if (cmd == "c") {
-    kalibrierung_durchfuehren();
+    aktive_steuerquelle = Steuerquelle::HANDCONTROLLER;
+    letzter_serieller_speed_wert = -1;
+    aktueller_gaswert = lies_gas_prozent();
+    setSpeed(aktueller_gaswert);
+    sende_fahrdaten(aktueller_gaswert);
+    Serial.println("OK MODE HANDCONTROLLER");
+    return;
+  }
+
+  if (cmd == "s" || cmd == "software") {
+    aktive_steuerquelle = Steuerquelle::SOFTWARE;
+    Serial.println("OK MODE SOFTWARE");
     return;
   }
 
   if (cmd == "h") {
     aktive_steuerquelle = Steuerquelle::HANDCONTROLLER;
-    Serial.println("OK HANDCONTROLLER");
+    letzter_serieller_speed_wert = -1;
+    aktueller_gaswert = lies_gas_prozent();
+    setSpeed(aktueller_gaswert);
+    sende_fahrdaten(aktueller_gaswert);
+    Serial.println("OK MODE HANDCONTROLLER");
     return;
   }
 
   if (cmd == "l" || cmd == "lane" || cmd == "spur" || cmd == "spurwechsel") {
-    aktive_steuerquelle = Steuerquelle::SERIAL_CMD;
     doSpurwechsel();
     Serial.println("OK LANE");
+    return;
+  }
+
+  if (cmd == "k" || cmd == "cal" || cmd == "kalibrierung") {
+    kalibrierung_durchfuehren();
     return;
   }
 
@@ -244,10 +279,13 @@ void handle_serial_command(String cmd) {
   }
 
   if (speed >= 0 && speed <= 100) {
-    aktive_steuerquelle = Steuerquelle::SERIAL_CMD;
-    aktueller_gaswert = speed;
-    setSpeed(speed);
-    Serial.printf("OK SPEED %d%%\n", speed);
+    if (aktive_steuerquelle == Steuerquelle::SOFTWARE) {
+      aktueller_gaswert = speed;
+      setSpeed(speed);
+      Serial.printf("OK SPEED %d%%\n", speed);
+    } else {
+      Serial.printf("IGNORED SPEED %d%% IN HANDCONTROLLER MODE\n", speed);
+    }
     return;
   }
 
@@ -266,7 +304,7 @@ void printHeartbeat() {
     jetzt,
     aktueller_gaswert,
     aktueller_speed,
-    aktive_steuerquelle == Steuerquelle::SERIAL_CMD ? "serial" : "handcontroller",
+    steuerquelle_als_text(aktive_steuerquelle),
     ESP.getFreeHeap()
   );
 }
@@ -300,7 +338,7 @@ void setup() {
 
   Serial.println("Carrera Handregler bereit.");
   Serial.printf("Standardwerte: Kein Gas=%d  Vollgas=%d\n", adc_kein_gas, adc_vollgas);
-  Serial.println("Serielle Befehle: s<0-100>, l, h, c");
+  Serial.println("Serielle Befehle: s<0-100>, s, c, k, l, h");
 
   startAccessPoint();
 }
