@@ -36,8 +36,7 @@ Im Ordner src/python:
 Linux oder WSL:
 
 ```bash
-python3 -m venv .venv
-./.venv/bin/python3 -m pip install requests
+sudo pip3 install requests
 ```
 
 Windows PowerShell:
@@ -52,7 +51,7 @@ py -m venv .venv
 Linux oder WSL:
 
 ```bash
-./.venv/bin/python3 Webhook.py
+python3 Webhook.py
 ```
 
 Windows PowerShell:
