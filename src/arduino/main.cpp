@@ -39,7 +39,7 @@ unsigned long letztes_heartbeat_ms = 0;
 
 enum class Steuerquelle {
   HANDCONTROLLER,
-  SERIAL
+  SERIAL_CMD
 };
 
 Steuerquelle aktive_steuerquelle = Steuerquelle::HANDCONTROLLER;
@@ -164,7 +164,7 @@ void setSpeed(int percent) {
 }
 
 void updateHandreglerSpeed() {
-  if (aktive_steuerquelle == Steuerquelle::SERIAL) {
+  if (aktive_steuerquelle == Steuerquelle::SERIAL_CMD) {
     return;
   }
 
@@ -226,7 +226,7 @@ void handle_serial_command(String cmd) {
   }
 
   if (cmd == "l" || cmd == "lane" || cmd == "spur" || cmd == "spurwechsel") {
-    aktive_steuerquelle = Steuerquelle::SERIAL;
+    aktive_steuerquelle = Steuerquelle::SERIAL_CMD;
     doSpurwechsel();
     Serial.println("OK LANE");
     return;
@@ -244,7 +244,7 @@ void handle_serial_command(String cmd) {
   }
 
   if (speed >= 0 && speed <= 100) {
-    aktive_steuerquelle = Steuerquelle::SERIAL;
+    aktive_steuerquelle = Steuerquelle::SERIAL_CMD;
     aktueller_gaswert = speed;
     setSpeed(speed);
     Serial.printf("OK SPEED %d%%\n", speed);
@@ -266,7 +266,7 @@ void printHeartbeat() {
     jetzt,
     aktueller_gaswert,
     aktueller_speed,
-    aktive_steuerquelle == Steuerquelle::SERIAL ? "serial" : "handcontroller",
+    aktive_steuerquelle == Steuerquelle::SERIAL_CMD ? "serial" : "handcontroller",
     ESP.getFreeHeap()
   );
 }
