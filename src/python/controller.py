@@ -5,10 +5,10 @@ import sys
 import time
 
 # sudo .venv/bin/python3 controller.py
-
-# cd src/python/
-# source .venv/bin/activate
-# ./.venv/bin/python3 controller.py
+# cd C:\Users\silas\Desktop\Studium\TIBSem6\Studienprojekt\Code\src\python
+# py -m venv .venv
+# .\.venv\Scripts\python.exe -m pip install pyserial requests
+# .\.venv\Scripts\python.exe controller.py --port COM12
 
 if sys.prefix == sys.base_prefix:
     print("Bitte mit dem venv starten: ./.venv/bin/python3 controller.py")
