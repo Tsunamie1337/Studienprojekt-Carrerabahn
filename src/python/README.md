@@ -26,6 +26,10 @@ Der ESP verarbeitet diese Befehle in der Arduino-Firmware.
 - Python-Paket:
   - `pyserial`
 
+Hinweis:
+- Auf Linux kannst du das Script direkt mit dem System-Python starten.
+- Eine virtuelle Umgebung ist optional, aber nicht mehr notwendig.
+
 ## Installation und Start (Windows PowerShell)
 
 In den Projektordner wechseln:
@@ -47,7 +51,7 @@ Starten:
 .\.venv\Scripts\python.exe controller.py --port COM12 --baud 115200
 ```
 
-## Installation und Start (Linux)
+## Installation und Start (Linux, nativ)
 
 In den Projektordner wechseln:
 
@@ -55,24 +59,25 @@ In den Projektordner wechseln:
 cd /pfad/zum/Code/src/python
 ```
 
-Virtuelle Umgebung erstellen und Paket installieren:
+Paket fuer das System-Python installieren:
 
 ```bash
-python3 -m venv .venv
-./.venv/bin/python3 -m pip install pyserial
+python3 -m pip install --user pyserial
 ```
 
 Starten:
 
 ```bash
-./.venv/bin/python3 controller.py --port /dev/ttyUSB0 --baud 115200
+python3 controller.py --port /dev/ttyUSB0 --baud 115200
 ```
 
 Alternative je nach USB-Seriell-Chip:
 
 ```bash
-./.venv/bin/python3 controller.py --port /dev/ttyACM0 --baud 115200
+python3 controller.py --port /dev/ttyACM0 --baud 115200
 ```
+
+Wenn du trotzdem eine virtuelle Umgebung bevorzugst, funktioniert das weiterhin genauso.
 
 
 ## Tastatursteuerung des Beispiel Skripts
