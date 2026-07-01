@@ -115,9 +115,10 @@ def speed_from_key(key: str) -> int | None:
     return None
 
 
-def print_help(port: str, baudrate: int) -> None:
+def print_help(port: str, baudrate: int, mode: str) -> None:
     print(f"Verbunden mit {port} @ {baudrate}")
-    print("Tasten: 1-9 = 10-90%, 0 = 100%, Leertaste = Spurwechsel, h = Handcontroller, c = Kalibrierung, ESC/q = Ende")
+    print(f"Modus: {mode}")
+    print("Tasten: 1-9 = 10-90%, 0 = 100%, Leertaste = Spurwechsel, c = Controller, s = Software, k = Kalibrierung, ESC/q = Ende")
 
 
 def main() -> int:
@@ -147,10 +148,12 @@ def main() -> int:
         print(f"Konnte {port} nicht oeffnen: {exc}")
         return 1
 
-    print_help(port, args.baud)
+    active_mode = "software"
+    print_help(port, args.baud, active_mode)
 
     try:
         with KeyReader() as key_reader:
+            send_command(ser, "s")
             while True:
                 drain_serial(ser)
                 key = key_reader.read_key()
@@ -159,7 +162,7 @@ def main() -> int:
                     continue
 
                 if key in ("\x1b", "q", "Q"):
-                    send_command(ser, "h")
+                    send_command(ser, "s")
                     print("Beendet.")
                     break
 
@@ -167,18 +170,25 @@ def main() -> int:
                     send_command(ser, "l")
                     continue
 
-                if key in ("h", "H"):
-                    send_command(ser, "h")
+                if key in ("c", "C", "h", "H"):
+                    send_command(ser, "c")
+                    active_mode = "controller"
+                    print("Modus: controller")
                     continue
 
-                if key in ("c", "C"):
-                    send_command(ser, "c")
+                if key in ("s", "S"):
+                    send_command(ser, "s")
+                    active_mode = "software"
+                    print("Modus: software")
                     continue
 
                 speed = speed_from_key(key)
                 if speed is not None:
-                    send_command(ser, f"s:{speed}")
-                    print(f"Speed: {speed}%")
+                    if active_mode == "software":
+                        send_command(ser, f"s:{speed}")
+                        print(f"Speed: {speed}%")
+                    else:
+                        print("Taste ignoriert im Controller-Modus. Mit 's' wieder Software aktivieren.")
     finally:
         ser.close()
 

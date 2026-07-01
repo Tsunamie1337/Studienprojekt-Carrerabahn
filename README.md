@@ -20,6 +20,9 @@ Zusaetzlich gilt:
 
 - Die Branches `serial` und `webhook` enthalten jeweils ein Python-Skript zur Steuerung.
 - In diesen beiden Branches liegt beim jeweiligen Python-Skript eine eigene README mit den branch-spezifischen Start- und Bedienhinweisen.
+- Im `serial`-Branch gibt es jetzt zwei umschaltbare Modi:
+	- `c` = Controller-Modus, Handregler steuert das Auto direkt
+	- `s` = Software-Modus, das Python-Skript steuert das Auto per Tastatur
 
 Hinweis fuer den aktuellen Branch:
 
@@ -88,6 +91,16 @@ Beim Start meldet die Firmware unter anderem:
 
 ## Hauptfunktionen erklaert
 
+### 0) Zwei Steuerungsmodi
+
+Die Firmware unterscheidet nun zwischen zwei Modi:
+
+- Controller-Modus: Der angeschlossene Handregler steuert das Auto.
+- Software-Modus: Die Tastatur im Python-Skript steuert das Auto.
+
+Das Python-Skript schaltet mit `c` und `s` zwischen den Modi um.
+Im Controller-Modus sendet die Firmware die Fahrdaten zusaetzlich seriell zum Python-Skript, und zwar im bisherigen `s:<wert>`-Format.
+
 ### 1) Handregler per ADC auslesen
 
 Die Funktion zur Gasbestimmung liest den ADC-Wert und normiert ihn auf 0 bis 100 %:
@@ -121,7 +134,7 @@ Es sind Werte für den Handregler vordefiniert, aber diese können je nach Setup
 Kalibrierung startet ueber den Serial Monitor mit:
 
 ```text
-c
+k
 ```
 
 Ablauf:

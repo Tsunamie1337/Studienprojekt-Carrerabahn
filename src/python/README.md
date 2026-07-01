@@ -15,6 +15,7 @@ Erst wenn diese Schritte erledigt sind, sollte die serielle Steuerung per `contr
 
 `controller.py` sendet serielle Textbefehle an den ESP.
 Der ESP verarbeitet diese Befehle in der Arduino-Firmware.
+Zusatzlich liest das Script die Rueckmeldungen des ESP mit, damit die Fahrdaten aus dem Controller-Modus sichtbar bleiben.
 
 ## Voraussetzungen
 
@@ -29,6 +30,19 @@ Der ESP verarbeitet diese Befehle in der Arduino-Firmware.
 Hinweis:
 - Auf Linux kannst du das Script direkt mit dem System-Python starten.
 - Eine virtuelle Umgebung ist optional, aber nicht mehr notwendig.
+
+## Steuerungsmodi
+
+Es gibt zwei Modi, die direkt per Tastatur umgeschaltet werden:
+
+- `c` = Controller-Modus
+  - Der Handregler steuert das Auto.
+  - Der ESP sendet die Fahrdaten zusaetzlich seriell im Format `s:<wert>` an das Python-Skript.
+- `s` = Software-Modus
+  - Die Tasten 1-9 und 0 steuern die Geschwindigkeit wie bisher.
+  - Handregler-Eingaben werden ignoriert.
+
+Kalibrierung bleibt ueber `k` erreichbar.
 
 ## Installation und Start (Windows PowerShell)
 
@@ -85,19 +99,21 @@ Wenn du trotzdem eine virtuelle Umgebung bevorzugst, funktioniert das weiterhin 
 - `1` bis `9` -> 10% bis 90% Geschwindigkeit
 - `0` -> 100% Geschwindigkeit
 - `Leertaste` -> Spurwechsel
-- `h` -> Handcontroller-Modus am ESP
-- `c` -> Kalibrierung am ESP starten
+- `c` -> Controller-Modus am ESP
+- `s` -> Software-Modus am ESP
+- `k` -> Kalibrierung am ESP starten
 - `ESC` oder `q` -> Beenden
 
 ## Nachrichtenformat an den ESP
 
 Das Script sendet ASCII-Text mit Zeilenende (`\n`).
 
+- Modus Controller aktivieren: `c\n`
+- Modus Software aktivieren: `s\n`
 - Geschwindigkeit: `s:<wert>`
   - Beispiel: `s:50\n` fuer 50%
 - Spurwechsel: `l\n`
-- Handcontroller: `h\n`
-- Kalibrierung: `c\n`
+- Kalibrierung: `k\n`
 
 ## Eigene Daten senden (ohne controller.py)
 
