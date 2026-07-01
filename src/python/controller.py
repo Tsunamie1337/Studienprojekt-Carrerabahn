@@ -1,3 +1,5 @@
+#!/usr/bin/env python3
+
 import argparse
 import os
 import platform
@@ -5,24 +7,16 @@ import select
 import sys
 import time
 
-# For windows
-# cd C:\Users\silas\Desktop\Studium\TIBSem6\Studienprojekt\Code\src\python
-# py -m venv .venv
-# .\.venv\Scripts\python.exe -m pip install pyserial
-# .\.venv\Scripts\python.exe controller.py --port COM12
-
-# For Linux
-# cd /path/to/Code/src/python
-# python3 -m venv .venv
-# ./.venv/bin/python3 -m pip install pyserial
-# ./.venv/bin/python3 controller.py --port /dev/ttyUSB0
-
-if sys.prefix == sys.base_prefix:
-    if os.name == "nt":
-        print("Bitte mit dem venv starten: .\\.venv\\Scripts\\python.exe controller.py")
-    else:
-        print("Bitte mit dem venv starten: ./.venv/bin/python3 controller.py")
-    raise SystemExit(1)
+# Optional setup
+# Windows:
+#   py -m venv .venv
+#   .\.venv\Scripts\python.exe -m pip install pyserial
+#   .\.venv\Scripts\python.exe controller.py --port COM12
+# Linux:
+#   python3 -m pip install --user pyserial
+#   python3 controller.py --port /dev/ttyUSB0
+#
+# A virtual environment still works, but it is no longer required.
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 if sys.path and os.path.abspath(sys.path[0]) == SCRIPT_DIR:
