@@ -21,7 +21,7 @@ int adc_vollgas  = 2027;
 const float DEADZONE = 0.03f;
 
 // --- Button ---
-// ✏️  GEÄNDERT: BTN_MS entfernt (war nur für altes delay-Protokoll relevant)
+// BTN_MS entfernt (war nur für altes delay-Protokoll relevant)
 const unsigned long SPURWECHSEL_COOLDOWN_MS = 500;
 unsigned long letzter_spurwechsel           = 0;
 bool letzter_btn_zustand                    = HIGH;
@@ -35,7 +35,7 @@ unsigned long letztes_status_ms        = 0;
 int  aktueller_speed    = 0;
 int  aktueller_gaswert  = 0;
 
-// ✏️  GEÄNDERT: Heartbeat-Intervall angepasst
+// Heartbeat-Intervall angepasst
 unsigned long letztes_heartbeat_ms = 0;
 
 enum class Steuerquelle {
@@ -44,13 +44,13 @@ enum class Steuerquelle {
 };
 
 Steuerquelle aktive_steuerquelle        = Steuerquelle::SOFTWARE;
-// ✏️  GEÄNDERT: letzter_serieller_speed_wert bleibt für Deduplizierung
+// letzter_serieller_speed_wert bleibt für Deduplizierung
 int letzter_serieller_speed_wert        = -1;
 
 // ───────────────────────────────────────────────────────
 
-// ✏️  GEÄNDERT: serial_lesen() entfernt – Protokoll ist jetzt frame-basiert
-// ✏️  GEÄNDERT: warte_auf_eingabe() bleibt nur für Kalibrierung
+// serial_lesen() entfernt – Protokoll ist jetzt frame-basiert
+// warte_auf_eingabe() bleibt nur für Kalibrierung
 
 String warte_auf_eingabe() {
   String buf = "";
@@ -149,7 +149,7 @@ const char* steuerquelle_als_text(Steuerquelle quelle) {
   return quelle == Steuerquelle::HANDCONTROLLER ? "handcontroller" : "software";
 }
 
-// ✏️  GEÄNDERT: Protokoll – sendet "Vxxx\n" (zero-padded, 3 Ziffern)
+// Protokoll – sendet "Vxxx\n" (zero-padded, 3 Ziffern)
 void sende_fahrdaten(int speed) {
   speed = constrain(speed, 0, 100);
   if (speed == letzter_serieller_speed_wert) return;
@@ -191,7 +191,7 @@ void handle_button_input() {
     if (aktuell == LOW && (jetzt - letzter_spurwechsel) > SPURWECHSEL_COOLDOWN_MS) {
       digitalWrite(PIN_BTN_OUT, LOW);
       letzter_spurwechsel = jetzt;
-      // ✏️  GEÄNDERT: Sendet "L\n" statt Klartext-Log für Spurwechsel-Event
+      // Sendet "L\n" statt Klartext-Log für Spurwechsel-Event
       Serial.println("L");
     }
 
@@ -201,8 +201,8 @@ void handle_button_input() {
   }
 }
 
-// ✏️  GEÄNDERT: handle_serial_command() komplett ersetzt durch frame_parser()
-//              Liest exakt 4 Bytes pro Frame: 1 Typ-Byte + 3 Daten-Bytes + '\n'
+// handle_serial_command() komplett ersetzt durch frame_parser()
+// Liest exakt 4 Bytes pro Frame: 1 Typ-Byte + 3 Daten-Bytes + '\n'
 void frame_parser() {
   // Puffer hält einen unvollständigen Frame zwischen loop()-Aufrufen
   static char buf[8];
@@ -295,7 +295,7 @@ void setup() {
 }
 
 void loop() {
-  // ✏️  GEÄNDERT: Serial.available()-Block ruft jetzt frame_parser() auf
+  // Serial.available()-Block ruft jetzt frame_parser() auf
   frame_parser();
 
   updateHandreglerSpeed();
@@ -304,7 +304,7 @@ void loop() {
 
   unsigned long jetzt = millis();
   if (jetzt - letztes_status_ms >= STATUS_INTERVAL_MS) {
-    // ✏️  GEÄNDERT: Statuszeile mit '#'-Prefix damit Python sie ignoriert
+    // Statuszeile mit '#'-Prefix damit Python sie ignoriert
     Serial.printf("# gas=%d%% spd=%d%%\n", aktueller_gaswert, aktueller_speed);
     letztes_status_ms = jetzt;
   }
