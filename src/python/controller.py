@@ -77,7 +77,7 @@ def find_default_port() -> str | None:
 def open_serial(port: str, baudrate: int):
     return serial.Serial(port=port, baudrate=baudrate, timeout=0, write_timeout=1)
 
-# ✏️  GEÄNDERT: send_command() baut jetzt ausschließlich valide Frames
+# send_command() baut jetzt ausschließlich valide Frames
 def send_frame(ser, frame: str) -> None:
     """Sendet einen Frame als '<frame>\n' ohne zusätzliches strip/encode-Overhead."""
     ser.write((frame + "\n").encode())
@@ -101,8 +101,7 @@ def send_mode_software(ser) -> None:
 def send_calibrate(ser) -> None:
     send_frame(ser, "K")
 
-# ✏️  GEÄNDERT: drain_serial() filtert '#'-Kommentarzeilen und wertet
-#              nur 'V'-Frames und 'L'-Frames aus
+# drain_serial() filtert '#'-Kommentarzeilen und wertet nur 'V'-Frames und 'L'-Frames aus           
 def drain_serial(ser) -> None:
     while ser.in_waiting:
         raw = ser.readline().decode("utf-8", errors="replace").strip()
@@ -129,7 +128,7 @@ def drain_serial(ser) -> None:
         # Unbekannte Frames ignorieren
         print(f"ESP (unbekannt): {raw}")
 
-# ✏️  GEÄNDERT: speed_from_key() unverändert – Logik war bereits sauber
+#
 def speed_from_key(key: str) -> int | None:
     if key == "0":
         return 100
@@ -170,7 +169,7 @@ def main() -> int:
 
     try:
         with KeyReader() as key_reader:
-            # ✏️  GEÄNDERT: Initialer Befehl als Frame
+            # Initialer Befehl als Frame
             send_mode_software(ser)
 
             while True:
