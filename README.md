@@ -14,33 +14,23 @@ Dieses Repository wird in drei Branches gepflegt:
 - `webhook`
 - `HandcontrollerOnly`
 
-Jeder Branch hat eine eigene Firmware-Variante mit eigenem `.cpp`-Skript fuer den ESP.
+Jeder Branch hat eine eigene Firmware-Variante mit eigenem `.cpp`-Skript fuer den ESP32-C3.
 
 Zusaetzlich gilt:
 
 - Die Branches `serial` und `webhook` enthalten jeweils ein Python-Skript zur Steuerung.
 - In diesen beiden Branches liegt beim jeweiligen Python-Skript eine eigene README mit den branch-spezifischen Start- und Bedienhinweisen.
 - Im `serial`-Branch gibt es jetzt zwei umschaltbare Modi:
-	- `c` = Controller-Modus, Handregler steuert das Auto direkt
-	- `s` = Software-Modus, das Python-Skript steuert das Auto per Tastatur
-
-Hinweis fuer den aktuellen Branch:
-
-- Firmware liegt in [src/arduino/main.cpp](src/arduino/main.cpp)
-- Python-Doku liegt in [src/python/README.md](src/python/README.md)
+	- `C` = Controller-Modus, Handregler steuert das Auto direkt
+	- `S` = Software-Modus, das Python-Skript steuert das Auto per Tastatur
 
 ## Projektueberblick
 
-Das Projekt liest die Gasstellung eines Handreglers analog ein und bildet sie auf ein PWM-Signal ab.
+
+Das Projekt liest entweder die Gasstellung eines Handreglers analog ein und bildet sie auf ein PWM-Signal ab. Andererseits kann man per Skript Steuerbefehle an das Fahrzeug senden.
 Das PWM-Signal wird so skaliert, dass die effektive Ausgangsspannung auf ca. 2.0 V begrenzt wird (bezogen auf 3.3 V Referenz).
 
-Wichtige Logik:
-- ADC-Eingang: Gaswert am Pin `PIN_GAS`
-- Kalibrierte Min/Max-Werte: `adc_kein_gas` und `adc_vollgas`
-- Normalisierung mit Deadzone
-- Mapping auf PWM-Bereich bis `PWM_MAX_2V`
-
-## Hardware (laut aktuellem Code)
+## Hardware
 
 - Board: ESP32-C3 (PlatformIO Env: `esp32c3` oder `esp32 super mini`)
 - Gaspoti/Trigger (ADC): GPIO 3
@@ -70,25 +60,6 @@ Im Projektordner:
 pio run
 pio run -t upload
 ```
-
-
-## Serial Monitor verwenden
-
-In [platformio.ini](platformio.ini) ist der Monitor auf 115200 Baud eingestellt.
-
-Start per Terminal:
-
-```bash
-pio device monitor -b 115200
-```
-
-Oder in VS Code den PlatformIO Serial Monitor starten.
-
-Beim Start meldet die Firmware unter anderem:
-- `Carrera Controller bereit.`
-- aktuelle Kalibrierwerte
-- Hinweis: `Kalibrieren: 'c' senden`
-
 ## Hauptfunktionen erklaert
 
 ### 0) Zwei Steuerungsmodi
@@ -96,10 +67,10 @@ Beim Start meldet die Firmware unter anderem:
 Die Firmware unterscheidet nun zwischen zwei Modi:
 
 - Controller-Modus: Der angeschlossene Handregler steuert das Auto.
-- Software-Modus: Die Tastatur im Python-Skript steuert das Auto.
+- Software-Modus: Ein vordefiniertes Python-Skript steuert das Auto.
 
-Das Python-Skript schaltet mit `c` und `s` zwischen den Modi um.
-Im Controller-Modus sendet die Firmware die Fahrdaten zusaetzlich seriell zum Python-Skript, und zwar im bisherigen `s:<wert>`-Format.
+Das Python-Skript schaltet mit `C` und `S` zwischen den Modi um.
+Im Controller-Modus sendet die Firmware die Fahrdaten zusaetzlich seriell zum Python-Skript im Format `S<0-100>`.
 
 ### 1) Handregler per ADC auslesen
 
@@ -116,7 +87,7 @@ Damit werden Rauschen und kleine Nullpunktabweichungen reduziert.
 Im Hauptloop wird der Gas-Prozentwert auf den PWM-Wert gemappt und ausgegeben:
 - PWM mit 12 Bit Aufloesung
 - Frequenz aktuell 5 kHz
-- max. PWM auf einen Zielwert von 2.0 V skaliert (`PWM_MAX_2V`)
+- max. PWM auf einen Zielwert von 2.0 V skaliert (`PWM_MAX_2V`). NICHT HÖHER EINSTELLEN! Die Carrerabahn könnte dadurch beschädigt werden.
 
 So folgt die Bahnsteuerung direkt der Trigger-Stellung.
 
@@ -125,16 +96,16 @@ So folgt die Bahnsteuerung direkt der Trigger-Stellung.
 Der Spurwechsel-Eingang wird entprellt und mit Cooldown verarbeitet:
 - aktiv bei LOW (gedrueckt)
 - Cooldown verhindert Mehrfachtrigger
-- Ausgang fuer Transistor wird invertiert geschaltet (wie im Code kommentiert)
+- Ausgang fuer Transistor wird invertiert geschaltet
 
 ## Kalibrierungsmodus
 
-Es sind Werte für den Handregler vordefiniert, aber diese können je nach Setup nicht komplett stimmen daher gibt 
+Es sind Werte für den Handregler vordefiniert, aber diese können je nach Setup nicht komplett stimmen daher gibt
 
 Kalibrierung startet ueber den Serial Monitor mit:
 
 ```text
-k
+K
 ```
 
 Ablauf:
