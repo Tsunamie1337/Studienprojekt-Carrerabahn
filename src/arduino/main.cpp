@@ -21,7 +21,7 @@ int adc_vollgas  = 2027;
 const float DEADZONE = 0.03f;
 
 // --- Button ---
-// ԣŴ��  GE+�NDERT: BTN_MS entfernt (war nur f++r altes delay-Protokoll relevant)
+// BTN_MS wurde entfernt; das alte Delay-Protokoll wird hier nicht mehr gebraucht.
 const unsigned long SPURWECHSEL_COOLDOWN_MS = 500;
 unsigned long letzter_spurwechsel           = 0;
 bool letzter_btn_zustand                    = HIGH;
@@ -35,7 +35,7 @@ unsigned long letztes_status_ms        = 0;
 int  aktueller_speed    = 0;
 int  aktueller_gaswert  = 0;
 
-// ԣŴ��  GE+�NDERT: Heartbeat-Intervall angepasst
+// Heartbeat-Intervall fuer serielle Statusmeldungen.
 unsigned long letztes_heartbeat_ms = 0;
 
 enum class Steuerquelle {
@@ -44,13 +44,10 @@ enum class Steuerquelle {
 };
 
 Steuerquelle aktive_steuerquelle        = Steuerquelle::SOFTWARE;
-// ԣŴ��  GE+�NDERT: letzter_serieller_speed_wert bleibt f++r Deduplizierung
+// Deduplizierung der seriellen Geschwindigkeitsmeldungen.
 int letzter_serieller_speed_wert        = -1;
 
-// ���������������������������������������������������������������������������������������������������������������������������������������������������������������������
-
-// ԣŴ��  GE+�NDERT: serial_lesen() entfernt ��� Protokoll ist jetzt frame-basiert
-// ԣŴ��  GE+�NDERT: warte_auf_eingabe() bleibt nur f++r Kalibrierung
+// Hilfsfunktion fuer die Kalibrierung; das normale Protokoll ist frame-basiert.
 
 String warte_auf_eingabe() {
   String buf = "";
@@ -79,9 +76,8 @@ int lese_adc_mittelwert(int samples = 20, int delay_ms = 10) {
 }
 
 void kalibrierung_durchfuehren() {
-  Serial.println("\n������������������������������������������������������������������������������������������������������������������������");
-  Serial.println("���       KALIBRIERUNG GESTARTET         ���");
-  Serial.println("������������������������������������������������������������������������������������������������������������������������");
+  Serial.println("\nKALIBRIERUNG GESTARTET");
+  Serial.println("----------------------");
 
   int neuer_kein_gas = 0;
   int neuer_vollgas  = 0;
@@ -100,30 +96,27 @@ void kalibrierung_durchfuehren() {
     Serial.printf("  Vollgas ADC:  %d\n", neuer_vollgas);
 
     if (abs(neuer_kein_gas - neuer_vollgas) < 100) {
-      Serial.println("\n���  Spreizung zu klein ��� bitte wiederholen.");
+      Serial.println("\nSpreizung zu klein, bitte wiederholen.");
       return;
     }
     break;
   }
 
   while (true) {
-    Serial.println("\n������������������������������������������������������������������������������������������������������������������������");
-    Serial.println("���       KALIBRIERUNG ABGESCHLOSSEN     ���");
-    Serial.println("������������������������������������������������������������������������������������������������������������������������");
-    Serial.printf("���  Kein Gas  ��� ADC: %-5d               ���\n", neuer_kein_gas);
-    Serial.printf("���  Vollgas   ��� ADC: %-5d               ���\n", neuer_vollgas);
-    Serial.printf("���  Spreizung:       %-5d counts         ���\n", abs(neuer_kein_gas - neuer_vollgas));
-    Serial.println("������������������������������������������������������������������������������������������������������������������������");
+    Serial.println("\nKALIBRIERUNG ABGESCHLOSSEN");
+    Serial.printf("  Kein Gas:  ADC %-5d\n", neuer_kein_gas);
+    Serial.printf("  Vollgas:   ADC %-5d\n", neuer_vollgas);
+    Serial.printf("  Spreizung:      %-5d counts\n", abs(neuer_kein_gas - neuer_vollgas));
     Serial.println("  Werte uebernehmen? [y / n]");
 
     String antwort = warte_auf_eingabe();
     if (antwort == "y") {
       adc_kein_gas = neuer_kein_gas;
       adc_vollgas  = neuer_vollgas;
-      Serial.println("ԣ�  Werte uebernommen!\n");
+      Serial.println("Werte uebernommen!\n");
       break;
     } else if (antwort == "n") {
-      Serial.println("��  Wiederhole...");
+      Serial.println("Wiederhole...");
       kalibrierung_durchfuehren();
       return;
     } else {
@@ -149,7 +142,7 @@ const char* steuerquelle_als_text(Steuerquelle quelle) {
   return quelle == Steuerquelle::HANDCONTROLLER ? "handcontroller" : "software";
 }
 
-// ԣŴ��  GE+�NDERT: Protokoll ��� sendet "Vxxx\n" (zero-padded, 3 Ziffern)
+// Serielle Geschwindigkeitsmeldung im Format "Vxxx\n".
 void sende_fahrdaten(int speed) {
   speed = constrain(speed, 0, 100);
   if (speed == letzter_serieller_speed_wert) return;
@@ -176,15 +169,15 @@ void doSpurwechsel() {
   if ((jetzt - letzter_spurwechsel) < SPURWECHSEL_COOLDOWN_MS) return;
   letzter_spurwechsel = jetzt;
 
-  // Diagnostic: report PIN_BTN_OUT and PWM duty before/after pulse
+  // Diagnose: PIN_BTN_OUT und PWM-Wert vor und nach dem Impuls ausgeben.
   int btn_before = digitalRead(PIN_BTN_OUT);
   int pwm_val_before = map(aktueller_speed, 0, 100, 0, PWM_MAX_2V);
   Serial.printf("# DBG L start t=%lu btn_before=%d pwm_val=%d speed=%d\n", jetzt, btn_before, pwm_val_before, aktueller_speed);
 
   Serial.printf("# L start t=%lu\n", jetzt);
-  // Try to reduce motor load briefly to help the mechanical switch
+  // Motorlast kurz reduzieren, damit der Schaltimpuls unter Last stabil bleibt.
   int pwm_current_val = map(aktueller_speed, 0, 100, 0, PWM_MAX_2V);
-  int reduced_percent = min(20, aktueller_speed); // do not increase speed
+  int reduced_percent = min(20, aktueller_speed); // Geschwindigkeit nicht erhoehen.
   int pwm_reduced_val = map(reduced_percent, 0, 100, 0, PWM_MAX_2V);
 
   if (pwm_reduced_val < pwm_current_val) {
@@ -196,7 +189,7 @@ void doSpurwechsel() {
   delay(80);
   digitalWrite(PIN_BTN_OUT, HIGH);
 
-  // keep reduced PWM briefly so mechanism finishes under lower load
+  // Den reduzierten PWM-Wert noch kurz halten, damit der Mechanismus sauber ausloest.
   delay(120);
 
   if (pwm_reduced_val < pwm_current_val) {
@@ -220,7 +213,7 @@ void handle_button_input() {
     if (aktuell == LOW && (jetzt - letzter_spurwechsel) > SPURWECHSEL_COOLDOWN_MS) {
       digitalWrite(PIN_BTN_OUT, LOW);
       letzter_spurwechsel = jetzt;
-      // ԣŴ��  GE+�NDERT: Sendet "L\n" statt Klartext-Log f++r Spurwechsel-Event
+      // Serielle Meldung fuer einen manuellen Spurwechsel.
       Serial.println("L");
     }
 
@@ -230,10 +223,10 @@ void handle_button_input() {
   }
 }
 
-// ԣŴ��  GE+�NDERT: handle_serial_command() komplett ersetzt durch frame_parser()
-//              Liest exakt 4 Bytes pro Frame: 1 Typ-Byte + 3 Daten-Bytes + '\n'
+// Ersetzt die fruehere String-Verarbeitung durch einen festen Frame-Parser.
+// Erwartet 1 Typ-Byte, 3 Daten-Bytes und '\n'.
 void frame_parser() {
-  // Puffer h+�lt einen unvollst+�ndigen Frame zwischen loop()-Aufrufen
+  // Puffer fuer einen unvollstaendigen Frame zwischen loop()-Aufrufen.
   static char buf[8];
   static int  buf_len = 0;
 
@@ -285,7 +278,7 @@ void frame_parser() {
       if (buf_len < (int)(sizeof(buf) - 1)) {
         buf[buf_len++] = c;
       } else {
-        // Puffer-+�berlauf ��� Frame verwerfen
+        // Pufferueberlauf: Frame verwerfen.
         buf_len = 0;
       }
     }
@@ -303,8 +296,6 @@ void printHeartbeat() {
     ESP.getFreeHeap()
   );
 }
-
-// ���������������������������������������������������������������������������������������������������������������������������������������������������������������������
 
 void setup() {
   Serial.begin(115200);
@@ -331,7 +322,7 @@ void setup() {
 }
 
 void loop() {
-  // ԣŴ��  GE+�NDERT: Serial.available()-Block ruft jetzt frame_parser() auf
+  // Serielle Befehle werden jetzt ueber den Frame-Parser verarbeitet.
   frame_parser();
 
   updateHandreglerSpeed();
@@ -340,7 +331,7 @@ void loop() {
 
   unsigned long jetzt = millis();
   if (jetzt - letztes_status_ms >= STATUS_INTERVAL_MS) {
-    // ԣŴ��  GE+�NDERT: Statuszeile mit '#'-Prefix damit Python sie ignoriert
+    // Statuszeile mit '#'-Prefix, damit Python sie ignoriert.
     Serial.printf("# gas=%d%% spd=%d%%\n", aktueller_gaswert, aktueller_speed);
     letztes_status_ms = jetzt;
   }
