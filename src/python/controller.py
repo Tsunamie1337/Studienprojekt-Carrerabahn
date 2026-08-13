@@ -38,6 +38,7 @@ except ImportError as exc:
     print("pyserial fehlt. Installiere es mit: pip install pyserial")
     raise SystemExit(1) from exc
 
+# Liefert den Standard-Port aus der Umgebungsvariable oder ein OS-Default.
 def get_default_port() -> str:
     env_port = os.environ.get("CARRERA_SERIAL_PORT")
     if env_port:
@@ -45,6 +46,7 @@ def get_default_port() -> str:
     return "COM12" if os.name == "nt" else "/dev/ttyUSB0"
 
 
+# Liest einzelne Tastendruecke auf der tastatur ohne \n
 class KeyReader:
     def __init__(self) -> None:
         self._fd = None
@@ -79,10 +81,12 @@ class KeyReader:
         return sys.stdin.read(1)
 
 
+# Erkennt, ob das Script unter WSL laeuft. Das hatte ich nie vergessen :[
 def running_in_wsl() -> bool:
     return "microsoft" in platform.release().lower() or "WSL_DISTRO_NAME" in os.environ
 
 
+# Nimmt den ersten gefundenen seriellen Port aus der Liste.
 def find_default_port() -> str | None:
     ports = list(list_ports.comports())
     if not ports:
@@ -90,16 +94,19 @@ def find_default_port() -> str | None:
     return ports[0].device
 
 
+# Oeffnet die serielle Verbindung zur Carrera-Schnittstelle
 def open_serial(port: str, baudrate: int):
     return serial.Serial(port=port, baudrate=baudrate, timeout=0, write_timeout=1)
 
 
+# Sendet genau einen Steuer-Frame mit Zeilenende an den ESP.
 def send_frame(ser, frame: str) -> None:
     line = (frame.strip() + "\n").encode("utf-8")
     ser.write(line)
     ser.flush()
 
 
+# Gibt alle aktuell anliegenden ESP-Zeilen auf der Konsole aus.
 def drain_serial(ser) -> None:
     while ser.in_waiting:
         raw = ser.readline().decode("utf-8", errors="replace").strip()
@@ -107,6 +114,7 @@ def drain_serial(ser) -> None:
             print(f"ESP: {raw}")
 
 
+# Wandelt eine Zifferntaste in einen Geschwindigkeitswert um.
 def speed_from_key(key: str) -> int | None:
     if key == "0":
         return 100
@@ -115,12 +123,14 @@ def speed_from_key(key: str) -> int | None:
     return None
 
 
+# Zeigt Startinfos und die Tastaturbelegung an.
 def print_help(port: str, baudrate: int, mode: str) -> None:
     print(f"Verbunden mit {port} @ {baudrate}")
     print(f"Modus: {mode}")
     print("Tasten: 1-9 = 10-90%, 0 = 100%, Leertaste = Spurwechsel, c = Controller, s = Software, k = Kalibrierung, ESC/q = Ende")
 
 
+# Hauptprogramm: verbindet sich mit dem ESP und verarbeitet Tasteneingaben.
 def main() -> int:
     parser = argparse.ArgumentParser(description="Carrera Controller per serieller Schnittstelle")
     parser.add_argument("--port", help="Serieller Port, z. B. COM12, /dev/ttyUSB0 oder /dev/ttyACM0")
@@ -198,6 +208,6 @@ def main() -> int:
 
     return 0
 
-
+# Das ist ne main
 if __name__ == "__main__":
     raise SystemExit(main())

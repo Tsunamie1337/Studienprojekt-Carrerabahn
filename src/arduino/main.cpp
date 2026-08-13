@@ -1,10 +1,10 @@
 ﻿#include <Arduino.h>
 
 // --- Pins ---
-const int PIN_GAS        = 3;
-const int PIN_BTN_IN     = 0;
-const int PWM_PIN        = 4;
-const int PIN_BTN_OUT    = 6;
+const int PIN_GAS        = 3;   // ADC-Eingang vom Handregler
+const int PIN_BTN_IN     = 0;   // Spurwechsel-Taster Eingang
+const int PWM_PIN        = 4;   // PWM to the track
+const int PIN_BTN_OUT    = 6;   // BC547 -> Base
 
 // --- PWM ---
 const int PWM_CHANNEL   = 0;
@@ -16,27 +16,27 @@ const int PWM_TARGET_MV = 2000;
 const int PWM_MAX_2V    = (PWM_MAX * PWM_TARGET_MV) / PWM_VREF_MV;
 
 // --- Handregler-Kalibrierung ---
-int adc_kein_gas = 3;
-int adc_vollgas  = 2027;
+int adc_kein_gas = 3;      // Trigger losgelassen
+int adc_vollgas  = 2027;   // Trigger voll gedrueckt
 const float DEADZONE = 0.03f;
 
 // --- Button ---
 // BTN_MS wurde entfernt; das alte Delay-Protokoll wird hier nicht mehr gebraucht.
-const unsigned long SPURWECHSEL_COOLDOWN_MS = 500;
+const unsigned long SPURWECHSEL_COOLDOWN_MS = 150; // Delay für welches der Spurwechsel gehalten wird
 unsigned long letzter_spurwechsel           = 0;
 bool letzter_btn_zustand                    = HIGH;
 unsigned long letzter_wechsel               = 0;
 
 // --- Serial / Status ---
 const unsigned long STATUS_INTERVAL_MS = 2000;
-unsigned long letztes_status_ms        = 0;
+unsigned long letzter_status_ms        = 0;
 
 // --- State ---
 int  aktueller_speed    = 0;
 int  aktueller_gaswert  = 0;
 
 // Heartbeat-Intervall fuer serielle Statusmeldungen.
-unsigned long letztes_heartbeat_ms = 0;
+unsigned long letzter_heartbeat_ms = 0;
 
 enum class Steuerquelle {
   SOFTWARE,
@@ -47,7 +47,7 @@ Steuerquelle aktive_steuerquelle        = Steuerquelle::SOFTWARE;
 // Deduplizierung der seriellen Geschwindigkeitsmeldungen.
 int letzter_serieller_speed_wert        = -1;
 
-// Hilfsfunktion fuer die Kalibrierung; das normale Protokoll ist frame-basiert.
+// Hilfsfunktion fuer die Kalibrierung;
 
 String warte_auf_eingabe() {
   String buf = "";
@@ -66,6 +66,7 @@ String warte_auf_eingabe() {
   }
 }
 
+// Für die Kalibirerung: Mittelt die eingelesenen Werte -> Weniger jitter
 int lese_adc_mittelwert(int samples = 20, int delay_ms = 10) {
   long summe = 0;
   for (int i = 0; i < samples; i++) {
@@ -75,6 +76,8 @@ int lese_adc_mittelwert(int samples = 20, int delay_ms = 10) {
   return (int)(summe / samples);
 }
 
+
+// Kalibirierungsfunktion. Hilfsfunktionen liegen drüber
 void kalibrierung_durchfuehren() {
   Serial.println("\nKALIBRIERUNG GESTARTET");
   Serial.println("----------------------");
@@ -125,6 +128,7 @@ void kalibrierung_durchfuehren() {
   }
 }
 
+// Handreglermodus: Gas einlesen
 int lies_gas_prozent() {
   int roh    = analogRead(PIN_GAS);
   int spanne = adc_vollgas - adc_kein_gas;
@@ -150,6 +154,7 @@ void sende_fahrdaten(int speed) {
   Serial.printf("V%03d\n", speed);
 }
 
+// Speichert aktuellen speed und schreibt es per PWM raus. GPIO 4
 void setSpeed(int percent) {
   percent = constrain(percent, 0, 100);
   aktueller_speed = percent;
@@ -157,6 +162,7 @@ void setSpeed(int percent) {
   ledcWrite(PWM_CHANNEL, pwm_val);
 }
 
+//Handreglermodus: Liest Handregler ein und uebernimmt speed 
 void updateHandreglerSpeed() {
   if (aktive_steuerquelle == Steuerquelle::SOFTWARE) return;
   aktueller_gaswert = lies_gas_prozent();
@@ -164,20 +170,16 @@ void updateHandreglerSpeed() {
   sende_fahrdaten(aktueller_gaswert);
 }
 
+//Schaltet GPIO6 um den Transistor auszulösen -> Spurwechsel (Low->High->Low)
 void doSpurwechsel() {
   unsigned long jetzt = millis();
   if ((jetzt - letzter_spurwechsel) < SPURWECHSEL_COOLDOWN_MS) return;
   letzter_spurwechsel = jetzt;
 
-  // Diagnose: PIN_BTN_OUT und PWM-Wert vor und nach dem Impuls ausgeben.
-  int btn_before = digitalRead(PIN_BTN_OUT);
-  int pwm_val_before = map(aktueller_speed, 0, 100, 0, PWM_MAX_2V);
-  Serial.printf("# DBG L start t=%lu btn_before=%d pwm_val=%d speed=%d\n", jetzt, btn_before, pwm_val_before, aktueller_speed);
-
   Serial.printf("# L start t=%lu\n", jetzt);
   // Motorlast kurz reduzieren, damit der Schaltimpuls unter Last stabil bleibt.
   int pwm_current_val = map(aktueller_speed, 0, 100, 0, PWM_MAX_2V);
-  int reduced_percent = min(20, aktueller_speed); // Geschwindigkeit nicht erhoehen.
+  int reduced_percent = min(20, aktueller_speed); // Geschwindigkeit nicht erhoehen !!!!
   int pwm_reduced_val = map(reduced_percent, 0, 100, 0, PWM_MAX_2V);
 
   if (pwm_reduced_val < pwm_current_val) {
@@ -186,11 +188,11 @@ void doSpurwechsel() {
   }
 
   digitalWrite(PIN_BTN_OUT, LOW);
-  delay(80);
+  delay(120); // Quasi ein emulierter button press. ToDo noch maybe etwas rumfixen, wie lange
   digitalWrite(PIN_BTN_OUT, HIGH);
 
   // Den reduzierten PWM-Wert noch kurz halten, damit der Mechanismus sauber ausloest.
-  delay(120);
+  delay(30);
 
   if (pwm_reduced_val < pwm_current_val) {
     ledcWrite(PWM_CHANNEL, pwm_current_val);
@@ -202,6 +204,7 @@ void doSpurwechsel() {
   Serial.printf("# L end t=%lu btn_after=%d pwm_val=%d speed=%d\n", millis(), btn_after, pwm_val_after, aktueller_speed);
 }
 
+// Nimmt die Buton Befehle an und entprellt diese
 void handle_button_input() {
   bool aktuell = digitalRead(PIN_BTN_IN);
   unsigned long jetzt = millis();
@@ -285,10 +288,11 @@ void frame_parser() {
   }
 }
 
+// Sendet hearbeats aus, damit man sehen kann, ob es noch alive ist. Kann in Zukunft deleted werden, wenn BEdarf besteht
 void printHeartbeat() {
   unsigned long jetzt = millis();
-  if ((jetzt - letztes_heartbeat_ms) < 5000) return;
-  letztes_heartbeat_ms = jetzt;
+  if ((jetzt - letzter_heartbeat_ms) < 5000) return;
+  letzter_heartbeat_ms = jetzt;
   Serial.printf(
     "# HB %lu gas=%d spd=%d src=%s heap=%u\n",
     jetzt, aktueller_gaswert, aktueller_speed,
@@ -297,6 +301,7 @@ void printHeartbeat() {
   );
 }
 
+//Initialisierungen für PWM, Serial, ADC , Pins
 void setup() {
   Serial.begin(115200);
   unsigned long serialStart = millis();
@@ -321,8 +326,8 @@ void setup() {
   Serial.println("# Carrera bereit");
 }
 
+// Ich erklaere nicht die loop
 void loop() {
-  // Serielle Befehle werden jetzt ueber den Frame-Parser verarbeitet.
   frame_parser();
 
   updateHandreglerSpeed();
@@ -330,9 +335,9 @@ void loop() {
   printHeartbeat();
 
   unsigned long jetzt = millis();
-  if (jetzt - letztes_status_ms >= STATUS_INTERVAL_MS) {
+  if (jetzt - letzter_status_ms >= STATUS_INTERVAL_MS) {
     // Statuszeile mit '#'-Prefix, damit Python sie ignoriert.
     Serial.printf("# gas=%d%% spd=%d%%\n", aktueller_gaswert, aktueller_speed);
-    letztes_status_ms = jetzt;
+    letzter_status_ms = jetzt;
   }
 }
