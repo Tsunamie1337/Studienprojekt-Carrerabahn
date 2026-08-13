@@ -1,10 +1,10 @@
 #include <Arduino.h>
 
 // --- Pins ---
-const int PIN_GAS        = 3;   // ADC-Eingang vom Handregler
-const int PIN_BTN_IN     = 0;   // Spurwechsel-Taster Eingang
-const int PWM_PIN        = 4;   // PWM to the track
-const int PIN_BTN_OUT    = 6;   // BC547 -> Base
+const int PIN_GAS        = 3;
+const int PIN_BTN_IN     = 0;
+const int PWM_PIN        = 4;
+const int PIN_BTN_OUT    = 6;   // BC547 Base — LOW = AN, HIGH = AUS
 
 // --- PWM ---
 const int PWM_CHANNEL   = 0;
@@ -16,8 +16,8 @@ const int PWM_TARGET_MV = 2000;
 const int PWM_MAX_2V    = (PWM_MAX * PWM_TARGET_MV) / PWM_VREF_MV;
 
 // --- Handregler-Kalibrierung ---
-int adc_kein_gas = 3;      // Trigger losgelassen
-int adc_vollgas  = 2027;   // Trigger voll gedrueckt
+int adc_kein_gas = 3;
+int adc_vollgas  = 2027;
 const float DEADZONE = 0.03f;
 
 // --- Button ---
@@ -29,12 +29,11 @@ unsigned long letzter_wechsel               = 0;
 
 // --- Serial / Status ---
 const unsigned long STATUS_INTERVAL_MS = 2000;
-unsigned long letztes_status_ms       = 0;
+unsigned long letztes_status_ms        = 0;
 
 // --- State ---
-int  aktueller_speed    = 0;   // 0-100%
-int  aktueller_gaswert  = 0;   // 0-100%
-bool spurwechsel_aktiv  = false;
+int  aktueller_speed    = 0;
+int  aktueller_gaswert  = 0;
 unsigned long letztes_heartbeat_ms = 0;
 
 enum class Steuerquelle {
@@ -42,8 +41,8 @@ enum class Steuerquelle {
   HANDCONTROLLER
 };
 
-Steuerquelle aktive_steuerquelle = Steuerquelle::SOFTWARE;
-int letzter_serieller_speed_wert = -1;
+Steuerquelle aktive_steuerquelle     = Steuerquelle::SOFTWARE;
+int letzter_serieller_speed_wert     = -1;
 
 // ───────────────────────────────────────────────────────
 
@@ -151,26 +150,17 @@ int lies_gas_prozent() {
   return (int)(normiert * 100.0f);
 }
 
-bool startAccessPoint() {
-  Serial.println("Serielle Steuerung aktiv. Modus per c/s umschaltbar.");
-  return true;
-}
-
 const char* steuerquelle_als_text(Steuerquelle quelle) {
   return quelle == Steuerquelle::HANDCONTROLLER ? "handcontroller" : "software";
 }
 
 void sende_fahrdaten(int speed) {
   speed = constrain(speed, 0, 100);
-  if (speed == letzter_serieller_speed_wert) {
-    return;
-  }
-
+  if (speed == letzter_serieller_speed_wert) return;
   letzter_serieller_speed_wert = speed;
-  Serial.printf("S%d\n", speed); 
+  Serial.printf("S%d\n", speed);
 }
 
-// Sets the speed per PWM
 void setSpeed(int percent) {
   percent = constrain(percent, 0, 100);
   aktueller_speed = percent;
@@ -179,64 +169,51 @@ void setSpeed(int percent) {
 }
 
 void updateHandreglerSpeed() {
-  if (aktive_steuerquelle == Steuerquelle::SOFTWARE) {
-    return;
-  }
+  if (aktive_steuerquelle == Steuerquelle::SOFTWARE) return;
 
-  aktive_steuerquelle = Steuerquelle::HANDCONTROLLER;
   aktueller_gaswert = lies_gas_prozent();
   setSpeed(aktueller_gaswert);
   sende_fahrdaten(aktueller_gaswert);
 }
 
-// Lane switch
+// Erzeugt einen sauberen Puls am Transistor (LOW=AN, HIGH=AUS)
 void doSpurwechsel() {
   unsigned long jetzt = millis();
   if ((jetzt - letzter_spurwechsel) < SPURWECHSEL_COOLDOWN_MS) return;
   letzter_spurwechsel = jetzt;
 
-  Serial.println("Spurwechsel ausgelöst");
-  digitalWrite(PIN_BTN_OUT, LOW);   // Transistor ON (invertierte Logik)
+  Serial.println("Spurwechsel ausgeloest");
+  digitalWrite(PIN_BTN_OUT, LOW);   // Transistor AN
   delay(BTN_MS);
-  digitalWrite(PIN_BTN_OUT, HIGH);  // Transistor OFF
+  digitalWrite(PIN_BTN_OUT, HIGH);  // Transistor AUS
 }
 
+// Liest den physischen Taster und delegiert an doSpurwechsel()
 void handle_button_input() {
   bool aktuell = digitalRead(PIN_BTN_IN);
   unsigned long jetzt = millis();
 
-  if (aktuell != letzter_btn_zustand && (jetzt - letzter_wechsel) > 20) {
-    letzter_btn_zustand = aktuell;
-    letzter_wechsel = jetzt;
-
-    if (aktuell == LOW && (jetzt - letzter_spurwechsel) > SPURWECHSEL_COOLDOWN_MS) {
-      Serial.println("Spurwechsel -> Transistor aus");
-      digitalWrite(PIN_BTN_OUT, LOW);
-      letzter_spurwechsel = jetzt;
-    }
-
-    if (aktuell == HIGH) {
-      digitalWrite(PIN_BTN_OUT, HIGH);
-      Serial.println("Transistor an");
-    }
-  }
-}
-
-// Protokoll PC -> ESP:
-// C\n  -> Handcontroller-Modus
-// S\n  -> Software-Modus
-// S<0-100>\n -> Geschwindigkeit setzen (nur Software-Modus)
-// L\n  -> Spurwechsel ausloesen
-// K\n  -> Kalibrierung starten
-void handle_serial_command(String cmd) {
-  cmd.trim();
-  cmd.toUpperCase(); 
-
-  if (cmd.length() == 0) {
+  // Zustandsänderung muss mindestens 20ms stabil sein (Entprellung)
+  if (aktuell == letzter_btn_zustand || (jetzt - letzter_wechsel) <= 20) {
     return;
   }
 
-  if (cmd == "C") { 
+  letzter_btn_zustand = aktuell;
+  letzter_wechsel = jetzt;
+
+  // Nur auf fallende Flanke reagieren (Taste gedrückt = LOW bei INPUT_PULLUP)
+  if (aktuell == LOW) {
+    doSpurwechsel();
+  }
+}
+
+void handle_serial_command(String cmd) {
+  cmd.trim();
+  cmd.toUpperCase();
+
+  if (cmd.length() == 0) return;
+
+  if (cmd == "C") {
     aktive_steuerquelle = Steuerquelle::HANDCONTROLLER;
     letzter_serieller_speed_wert = -1;
     aktueller_gaswert = lies_gas_prozent();
@@ -246,19 +223,19 @@ void handle_serial_command(String cmd) {
     return;
   }
 
-  if (cmd == "S") { 
+  if (cmd == "S") {
     aktive_steuerquelle = Steuerquelle::SOFTWARE;
     Serial.println("OK MODE SOFTWARE");
     return;
   }
 
-  if (cmd == "L") { 
+  if (cmd == "L") {
     doSpurwechsel();
     Serial.println("OK LANE");
     return;
   }
 
-  if (cmd == "K") { 
+  if (cmd == "K") {
     kalibrierung_durchfuehren();
     return;
   }
@@ -282,11 +259,9 @@ void handle_serial_command(String cmd) {
 
 void printHeartbeat() {
   unsigned long jetzt = millis();
-  if ((jetzt - letztes_heartbeat_ms) < 5000) {
-    return;
-  }
-
+  if ((jetzt - letztes_heartbeat_ms) < 5000) return;
   letztes_heartbeat_ms = jetzt;
+
   Serial.printf(
     "Heartbeat: %lu ms | gas=%d%% | speed=%d%% | source=%s | freeHeap=%u\n",
     jetzt,
@@ -314,20 +289,18 @@ void setup() {
   pinMode(PIN_GAS, INPUT);
   pinMode(PIN_BTN_IN, INPUT_PULLUP);
 
-  // PWM
   pinMode(PWM_PIN, OUTPUT);
   ledcSetup(PWM_CHANNEL, PWM_FREQ_HZ, PWM_RES_BITS);
   ledcAttachPin(PWM_PIN, PWM_CHANNEL);
   ledcWrite(PWM_CHANNEL, 0);
 
-  // Transistor
+  // Transistor: HIGH = AUS im Ruhezustand
   pinMode(PIN_BTN_OUT, OUTPUT);
-  digitalWrite(PIN_BTN_OUT, HIGH);  // AUS (invertierte Logik)
+  digitalWrite(PIN_BTN_OUT, HIGH);
 
   Serial.println("Carrera Handregler bereit.");
   Serial.printf("Standardwerte: Kein Gas=%d  Vollgas=%d\n", adc_kein_gas, adc_vollgas);
   Serial.println("Serielle Befehle: S<0-100>, S, C, K, L");
-  startAccessPoint();
 }
 
 void loop() {
