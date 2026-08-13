@@ -159,7 +159,7 @@ def main() -> int:
                     break
 
                 if key == " ":
-                    send_command(ser, "L") 
+                    send_command(ser, "l") 
                     continue
 
                 if key in ("c", "C", "h", "H"):
