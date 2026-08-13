@@ -9,6 +9,7 @@ import time
 
 # Optional setup
 # Windows:
+#   cd C:\Users\silas\Desktop\Studium\TIBSem6\Studienprojekt\Code\src\python
 #   py -m venv .venv
 #   .\.venv\Scripts\python.exe -m pip install pyserial
 #   .\.venv\Scripts\python.exe controller.py --port COM12
