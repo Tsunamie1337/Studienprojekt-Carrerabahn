@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+﻿#!/usr/bin/env python3
 
 import argparse
 import os
@@ -9,7 +9,6 @@ import time
 
 # Optional setup
 # Windows:
-#   cd C:\Users\silas\Desktop\Studium\TIBSem6\Studienprojekt\Code\src\python
 #   py -m venv .venv
 #   .\.venv\Scripts\python.exe -m pip install pyserial
 #   .\.venv\Scripts\python.exe controller.py --port COM12
@@ -45,6 +44,7 @@ def get_default_port() -> str:
         return env_port
     return "COM12" if os.name == "nt" else "/dev/ttyUSB0"
 
+
 class KeyReader:
     def __init__(self) -> None:
         self._fd = None
@@ -78,8 +78,10 @@ class KeyReader:
             return None
         return sys.stdin.read(1)
 
+
 def running_in_wsl() -> bool:
     return "microsoft" in platform.release().lower() or "WSL_DISTRO_NAME" in os.environ
+
 
 def find_default_port() -> str | None:
     ports = list(list_ports.comports())
@@ -87,13 +89,16 @@ def find_default_port() -> str | None:
         return None
     return ports[0].device
 
+
 def open_serial(port: str, baudrate: int):
     return serial.Serial(port=port, baudrate=baudrate, timeout=0, write_timeout=1)
 
-def send_command(ser, command: str) -> None:
-    line = (command.strip() + "\n").encode("utf-8")
+
+def send_frame(ser, frame: str) -> None:
+    line = (frame.strip() + "\n").encode("utf-8")
     ser.write(line)
     ser.flush()
+
 
 def drain_serial(ser) -> None:
     while ser.in_waiting:
@@ -101,7 +106,7 @@ def drain_serial(ser) -> None:
         if raw:
             print(f"ESP: {raw}")
 
-#  Geschwindigkeit aus Taste: 1-9 -> 10-90%, 0 -> 100%
+
 def speed_from_key(key: str) -> int | None:
     if key == "0":
         return 100
@@ -109,10 +114,12 @@ def speed_from_key(key: str) -> int | None:
         return int(key) * 10
     return None
 
+
 def print_help(port: str, baudrate: int, mode: str) -> None:
     print(f"Verbunden mit {port} @ {baudrate}")
     print(f"Modus: {mode}")
-    print("Tasten: 1-9 = 10-90%, 0 = 100%, Leertaste = Spurwechsel, c = Controller, s = Software, k = Kalibrierung, ESC/q = Ende") 
+    print("Tasten: 1-9 = 10-90%, 0 = 100%, Leertaste = Spurwechsel, c = Controller, s = Software, k = Kalibrierung, ESC/q = Ende")
+
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Carrera Controller per serieller Schnittstelle")
@@ -132,7 +139,7 @@ def main() -> int:
         available_ports = ", ".join(device.device for device in list_ports.comports())
         if not available_ports:
             available_ports = "/dev/ttyS0 bis /dev/ttyS3"
-        print(f"{port} ist unter WSL nicht direkt als Windows-COM-Port verfügbar. Starte das Script unter Windows oder verwende einen in WSL sichtbaren Port. Verfügbare Ports: {available_ports}")
+        print(f"{port} ist unter WSL nicht direkt als Windows-COM-Port verf++gbar. Starte das Script unter Windows oder verwende einen in WSL sichtbaren Port. Verf++gbare Ports: {available_ports}")
         return 1
 
     try:
@@ -146,7 +153,7 @@ def main() -> int:
 
     try:
         with KeyReader() as key_reader:
-            send_command(ser, "S") 
+            send_frame(ser, "S")
             while True:
                 drain_serial(ser)
                 key = key_reader.read_key()
@@ -155,34 +162,34 @@ def main() -> int:
                     continue
 
                 if key in ("\x1b", "q", "Q"):
-                    send_command(ser, "S0") # Setzt Speed auf 0 vor dem Beenden
+                    send_frame(ser, "S")
                     print("Beendet.")
                     break
 
                 if key == " ":
-                    send_command(ser, "l") 
+                    send_frame(ser, "L")
                     continue
 
                 if key in ("c", "C", "h", "H"):
-                    send_command(ser, "C") 
+                    send_frame(ser, "C")
                     active_mode = "controller"
                     print("Modus: controller")
                     continue
 
                 if key in ("s", "S"):
-                    send_command(ser, "S") 
+                    send_frame(ser, "S")
                     active_mode = "software"
                     print("Modus: software")
                     continue
 
                 if key in ("k", "K"):
-                    send_command(ser, "K") 
+                    send_frame(ser, "K")
                     continue
 
                 speed = speed_from_key(key)
                 if speed is not None:
                     if active_mode == "software":
-                        send_command(ser, f"S{speed}") 
+                        send_frame(ser, f"V{speed:03d}")
                         print(f"Speed: {speed}%")
                     else:
                         print("Taste ignoriert im Controller-Modus. Mit 's' wieder Software aktivieren.")
@@ -190,6 +197,7 @@ def main() -> int:
         ser.close()
 
     return 0
+
 
 if __name__ == "__main__":
     raise SystemExit(main())
