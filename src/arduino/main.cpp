@@ -22,7 +22,7 @@ const float DEADZONE = 0.03f;
 
 // --- Button ---
 // BTN_MS wurde entfernt; das alte Delay-Protokoll wird hier nicht mehr gebraucht.
-const unsigned long SPURWECHSEL_COOLDOWN_MS = 150; // Delay für welches der Spurwechsel gehalten wird
+const unsigned long SPURWECHSEL_COOLDOWN_MS = 150; // Delay fuer welches der Spurwechsel nicht nochmal gesetzt wird. Bei lag einfach erhoehen.
 unsigned long letzter_spurwechsel           = 0;
 bool letzter_btn_zustand                    = HIGH;
 unsigned long letzter_wechsel               = 0;
@@ -66,7 +66,7 @@ String warte_auf_eingabe() {
   }
 }
 
-// Für die Kalibirerung: Mittelt die eingelesenen Werte -> Weniger jitter
+// Fuer die Kalibirerung: Mittelt die eingelesenen Werte -> Weniger jitter
 int lese_adc_mittelwert(int samples = 20, int delay_ms = 10) {
   long summe = 0;
   for (int i = 0; i < samples; i++) {
@@ -77,7 +77,7 @@ int lese_adc_mittelwert(int samples = 20, int delay_ms = 10) {
 }
 
 
-// Kalibirierungsfunktion. Hilfsfunktionen liegen drüber
+// Kalibirierungsfunktion. Hilfsfunktionen liegen drueber
 void kalibrierung_durchfuehren() {
   Serial.println("\nKALIBRIERUNG GESTARTET");
   Serial.println("----------------------");
@@ -170,7 +170,9 @@ void updateHandreglerSpeed() {
   sende_fahrdaten(aktueller_gaswert);
 }
 
-//Schaltet GPIO6 um den Transistor auszulösen -> Spurwechsel (Low->High->Low)
+// Schaltet GPIO6 um den Transistor auszuloesen -> Spurwechsel (Low->High->Low)
+// Ungefaehr bei der Kreidemarkierung Druecken (Halbe Autolaenge vor dem Sensor)
+  // Wenn du das nicht schaffst Skill issue :P
 void doSpurwechsel() {
   unsigned long jetzt = millis();
   if ((jetzt - letzter_spurwechsel) < SPURWECHSEL_COOLDOWN_MS) return;
@@ -182,17 +184,12 @@ void doSpurwechsel() {
   int reduced_percent = min(20, aktueller_speed); // Geschwindigkeit nicht erhoehen !!!!
   int pwm_reduced_val = map(reduced_percent, 0, 100, 0, PWM_MAX_2V);
 
-  if (pwm_reduced_val < pwm_current_val) {
-    Serial.printf("# DBG L reduce pwm from %d to %d\n", pwm_current_val, pwm_reduced_val);
-    ledcWrite(PWM_CHANNEL, pwm_reduced_val);
-  }
-
   digitalWrite(PIN_BTN_OUT, LOW);
-  delay(120); // Quasi ein emulierter button press. ToDo noch maybe etwas rumfixen, wie lange
+  delay(300); // Quasi ein emulierter button press. ToDo Hier kann man noch die Werte anpassen fuer besseres Buttonverhalten.
   digitalWrite(PIN_BTN_OUT, HIGH);
 
   // Den reduzierten PWM-Wert noch kurz halten, damit der Mechanismus sauber ausloest.
-  delay(30);
+  //delay(150); Einfach nach Gefuehl anpassen.
 
   if (pwm_reduced_val < pwm_current_val) {
     ledcWrite(PWM_CHANNEL, pwm_current_val);
@@ -301,7 +298,7 @@ void printHeartbeat() {
   );
 }
 
-//Initialisierungen für PWM, Serial, ADC , Pins
+//Initialisierungen fuer PWM, Serial, ADC , Pins
 void setup() {
   Serial.begin(115200);
   unsigned long serialStart = millis();
